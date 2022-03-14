@@ -12,6 +12,26 @@ const app = express();
 
 app.use(bodyParser.json());
 
+const events = async (eventIds) => {
+	try {
+		const events = await Event.find({ _id: { $in: eventIds } });
+		return events.map(event => {
+			return { ...event._doc, _id: event.id, creator: user.bind(this, event._doc.creator) };
+		});
+	} catch (err) {
+		throw err;
+	}
+};
+
+const user = async (userId) => {
+	try {
+		const user = await User.findById(userId);
+		return { ...user._doc, _id: user.id, createdEvents: events.bind(this, user._doc.createdEvents) };
+	} catch (err) {
+		throw err;
+	}
+};
+
 app.use('/graphql', graphqlHTTP({
 	schema: buildSchema(`
 
@@ -21,12 +41,14 @@ app.use('/graphql', graphqlHTTP({
 			description: String!
 			price: Float!
 			date: String!
+			creator: User!
 		}
 
 		type User {
 			_id: ID!
 			email: String!
 			password: String
+			createdEvents: [Event!]
 		}
 
 		input UserType {
@@ -58,9 +80,10 @@ app.use('/graphql', graphqlHTTP({
 	rootValue: {
 		events: async () => {
 			try {
+				// const events = await Event.find().populate('creator');
 				const events = await Event.find();
 				return events.map(event => {
-					return { ...event._doc, _id: event.id };
+					return { ...event._doc, _id: event.id, creator: user.bind(this, event._doc.creator) };
 				});
 			} catch (err) {
 				throw err;
@@ -76,15 +99,15 @@ app.use('/graphql', graphqlHTTP({
 			});
 			try {
 				const createdEvent = await event.save();
-				const user = await User.findById('622dfcece05d89a92879d41c');
-				if (!user) {
+				const fetchedUser = await User.findById('622dfcece05d89a92879d41c');
+				if (!fetchedUser) {
 					throw new Error('User doesnt exist');
 				}
-				await user.createdEvents.push(event);
-				await user.save();
-				return createdEvent;
+				await fetchedUser.createdEvents.push(event);
+				await fetchedUser.save();
+				return { ...createdEvent._doc, _id: createdEvent.id, creator: user.bind(this, createdEvent._doc.creator) };
 
-			} catch (error) {
+			} catch (err) {
 				throw err;
 			}
 		},
